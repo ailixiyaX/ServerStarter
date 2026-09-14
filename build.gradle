@@ -41,9 +41,15 @@ dependencies {
 
 shadowJar {
     setArchiveClassifier("")
+    // 归档名统一用小写：发布包内是 serverstarter-<版本>.jar，startserver.bat / startserver.sh 与
+    // GitHub release 资产名（copyJar / releaseAssets）都按这个名字找；
+    // 大小写不一致时 Windows 能凑合（不敏感），Linux 上 copyJar 会静默少打 jar
+    archiveBaseName = 'serverstarter'
 }
 
 jar {
+    archiveBaseName = 'serverstarter'
+
     manifest {
         attributes(
                 'Class-Path': configurations.runtimeClasspath.collect { it.getName() }.join(' '),
@@ -117,7 +123,7 @@ githubRelease {
     targetCommitish = "master"
     overwrite = true
 
-    releaseAssets ("$buildDir/libs/ServerStarter-${version}.jar",file("$buildDir/release/serverstarter-${version}.zip"))
+    releaseAssets ("$buildDir/libs/serverstarter-${version}.jar",file("$buildDir/release/serverstarter-${version}.zip"))
 }
 
 tasks.githubRelease.dependsOn zipDist
