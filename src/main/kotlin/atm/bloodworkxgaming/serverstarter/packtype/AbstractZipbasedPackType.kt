@@ -4,8 +4,8 @@ import atm.bloodworkxgaming.serverstarter.InitException
 import atm.bloodworkxgaming.serverstarter.InternetManager
 import atm.bloodworkxgaming.serverstarter.ServerStarter
 import atm.bloodworkxgaming.serverstarter.config.ConfigFile
-import atm.bloodworkxgaming.serverstarter.util.ByteProgressReporter
 import atm.bloodworkxgaming.serverstarter.util.ApiVerdict
+import atm.bloodworkxgaming.serverstarter.util.PackObtainer
 import java.io.File
 import java.io.IOException
 import java.nio.file.FileSystems
@@ -24,48 +24,25 @@ abstract class AbstractZipbasedPackType(private val configFile: ConfigFile, prot
     /**
      * ① 下载（或本地定位）整合包 zip。
      *
-     * Q5：modpackUrl 恰为 "./.zip" 时，扫描进程 CWD 下最新的 *.zip 作为整合包；
-     * file:// 相对 CWD 解析；其余走网络下载。
+     * Q5：modpackUrl 恰为 "./.zip" 时，扫描进程 CWD 下最新的 `*.zip` / `*.mrpack` 作为整合包；
+     * file:// 相对 CWD 解析；其余走网络下载。实现统一在 [PackObtainer]，本类只负责把
+     * 包型自己的 [cleanUrl] 传下去。
+     *
+     * [preObtainedPack] 非空时直接复用（自动识别格式时包已经取过一次，避免重复下载）。
      */
     override fun obtainPack(): File {
-        val url = configFile.install.modpackUrl
-        return when {
-            url == "./.zip" -> findLocalZip()
-            url.startsWith("file://") -> File(url.substring(7))
-            else -> downloadFile(cleanUrl(url))
+        preObtainedPack?.let {
+            ServerStarter.LOGGER.info("Reusing the modpack file obtained for format detection: " + it.absolutePath)
+            return it
         }
+        return PackObtainer.obtain(configFile.install.modpackUrl, basePath, internetManager, ::cleanUrl)
     }
 
     /**
-     * Q5：扫描进程 CWD（[File]("").absoluteFile）直接子级的 *.zip 文件（不含子目录，
-     * 大小写不敏感），取 lastModified 最新者；找不到则报错退出。
+     * 自动识别 `modpackFormat` 时，`ServerStarter` 必须先取到包才能判断格式，取到的文件注入到这里复用；
+     * 显式配置格式时保持 null（`obtainPack()` 照常按 URL 下载/本地定位）。
      */
-    private fun findLocalZip(): File {
-        val cwd = File("").absoluteFile
-        val newestZip = cwd.listFiles { f -> f.isFile && f.name.endsWith(".zip", ignoreCase = true) }
-                ?.maxByOrNull { it.lastModified() }
-                ?: throw InitException("未在 ${cwd.absolutePath} 找到整合包 zip，请放置 *.zip 后重试")
-        ServerStarter.LOGGER.info("Using local modpack zip: " + newestZip.absolutePath)
-        return newestZip
-    }
-
-    @Throws(IOException::class)
-    private fun downloadFile(url: String): File {
-        ServerStarter.LOGGER.info("Attempting to download modpack Zip.")
-        val suffix = url.split(".").last()
-        try {
-            val to = File(basePath + "modpack-download.$suffix")
-
-            internetManager.downloadToFile(url, to, ByteProgressReporter())
-            ServerStarter.LOGGER.info("Downloaded the modpack zip file to " + to.absolutePath)
-
-            return to
-
-        } catch (e: IOException) {
-            ServerStarter.LOGGER.error("Pack could not be downloaded")
-            throw e
-        }
-    }
+    var preObtainedPack: File? = null
 
     /**
      * ② 从 zip 解析最终生效版本（Q3：manifest 优先、yaml 兜底）。

@@ -3,9 +3,12 @@ package atm.bloodworkxgaming.serverstarter
 import atm.bloodworkxgaming.serverstarter.config.ConfigFile
 import atm.bloodworkxgaming.serverstarter.config.LockFile
 import atm.bloodworkxgaming.serverstarter.logger.PrimitiveLogger
+import atm.bloodworkxgaming.serverstarter.packtype.AbstractZipbasedPackType
 import atm.bloodworkxgaming.serverstarter.packtype.IPackType
 import atm.bloodworkxgaming.serverstarter.util.AppVersion
 import atm.bloodworkxgaming.serverstarter.util.ClientOnlyModFilter
+import atm.bloodworkxgaming.serverstarter.util.PackFormatDetector
+import atm.bloodworkxgaming.serverstarter.util.PackObtainer
 import atm.bloodworkxgaming.serverstarter.yaml.CustomConstructor
 import org.apache.commons.io.FileUtils
 import org.fusesource.jansi.Ansi.ansi
@@ -148,6 +151,40 @@ class ServerStarter(args: Array<String>) {
         }
     }
 
+    /** 格式解析结果：最终生效的包型名 + 自动识别时已经取到的包文件（显式配置时为 null）。 */
+    private data class ResolvedPackFormat(val format: String, val preObtainedPack: File?)
+
+    /**
+     * `modpackFormat` 是否交给自动识别：空 / `auto` / `detect`（大小写与空白无关）。
+     */
+    private fun isAutoPackFormat(format: String): Boolean {
+        val normalized = format.trim().lowercase()
+        return normalized.isEmpty() || normalized == "auto" || normalized == "detect"
+    }
+
+    /**
+     * 解析整合包格式：显式配置优先；`modpackFormat` 为空 / `auto` / `detect` 时，
+     * 先把包取到手再看内容自动识别（[PackFormatDetector]）。
+     *
+     * 识别结果会写回 `config.install.modpackFormat`，让后续流程（客户端模组过滤提示、
+     * 纯 zip 的版本兜底规则、日志）看到最终格式；已取到的包一并返回，避免二次下载。
+     */
+    private fun resolvePackFormat(internetManager: InternetManager): ResolvedPackFormat {
+        if (!isAutoPackFormat(config.install.modpackFormat) || config.install.modpackUrl.isEmpty()) {
+            return ResolvedPackFormat(config.install.modpackFormat, null)
+        }
+
+        val zip = PackObtainer.obtain(
+                config.install.modpackUrl,
+                config.install.normalizedInstallPath,
+                internetManager,
+                PackObtainer::cursePageDownloadUrl)
+        val detected = PackFormatDetector.detectOrZip(zip)
+        LOGGER.info("modpackFormat '${config.install.modpackFormat}' -> auto-detected '$detected' from ${zip.name}")
+        config.install.modpackFormat = detected
+        return ResolvedPackFormat(detected, zip)
+    }
+
     fun startLoading() {
 
         val internetManager = InternetManager(config)
@@ -161,8 +198,12 @@ class ServerStarter(args: Array<String>) {
 
         val loaderManager = LoaderManager(config, internetManager)
         if (lockFile.checkShouldInstall(config) || installOnly) {
-            val packtype = IPackType.createPackType(config.install.modpackFormat, config, internetManager)
+            val resolved = resolvePackFormat(internetManager)
+            val packtype = IPackType.createPackType(resolved.format, config, internetManager)
                     ?: throw InitException("Unknown pack format given in config, shutting down.")
+            resolved.preObtainedPack?.let { zip ->
+                (packtype as? AbstractZipbasedPackType)?.preObtainedPack = zip
+            }
             if (config.install.modpackFormat == "modrinth"){
                 LOGGER.info("Client-only mods are filtered automatically.")
             }

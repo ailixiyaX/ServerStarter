@@ -65,6 +65,8 @@ install:
   # - modrinth
   # - curseid
   # - zip or zipfile
+  # - auto / detect (or leave it empty): the format is detected from the pack contents
+  #   (modrinth.index.json -> modrinth, manifest.json with a minecraft section -> curse, otherwise zip)
   modpackFormat: curse
 
   # Settings which are specific to the format used, might not be needed in some casese

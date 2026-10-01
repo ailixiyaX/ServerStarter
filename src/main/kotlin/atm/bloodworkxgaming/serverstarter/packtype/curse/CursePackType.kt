@@ -10,6 +10,7 @@ import atm.bloodworkxgaming.serverstarter.util.ZipExtractor
 import atm.bloodworkxgaming.serverstarter.util.ApiVerdict
 import atm.bloodworkxgaming.serverstarter.util.CurseModrinthPreScan
 import atm.bloodworkxgaming.serverstarter.util.FileIgnoreRules
+import atm.bloodworkxgaming.serverstarter.util.PackObtainer
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import okhttp3.Request
@@ -26,10 +27,8 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
     private val oldFiles = File(basePath + "OLD_TO_DELETE/")
 
     override fun cleanUrl(url: String): String {
-        if (url.contains("curseforge.com") && !url.endsWith("/download"))
-            return "$url/download"
-
-        return url
+        // 与自动识别模式共用一份实现（PackObtainer）
+        return PackObtainer.cursePageDownloadUrl(url)
     }
 
     @Throws(IOException::class)

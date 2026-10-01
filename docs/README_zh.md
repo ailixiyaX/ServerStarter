@@ -93,7 +93,7 @@ java -jar serverstarter-<版本>.jar install
 | `downloadSource` | 下载源：`mojang`（官方直连，走原 `--installServer` 流程）/ `bmclapi`（通过 BMCLAPI 镜像站进程内完成安装，失败自动回退官方流程） | `mojang` | `bmclapi` |
 | `mirrorUrl` | 镜像站 apiRoot 覆盖（仅 `downloadSource: bmclapi` 时生效）；为空使用默认 `https://bmclapi2.bangbang93.com`，可填 OpenBMCLAPI 节点 | `~` | `https://bmclapi.example.com` |
 | `modpackUrl` | 整合包下载地址；支持 http(s) URL 与 `file://` 本地路径（相对路径亦可）,若使用固定字符`"./.zip"`则自动寻找同级目录下的`.zip`文件 | `""` | `file://./modpacks/pack.zip` |
-| `modpackFormat` | 整合包格式：`curse` / `curseforge`、`modrinth`、`curseid`、`zip` / `zipfile` | `""` | `curse` |
+| `modpackFormat` | 整合包格式：`curse` / `curseforge`、`modrinth`、`curseid`、`zip` / `zipfile`；留空（或写 `auto` / `detect`）则按包内容自动识别：有 `modrinth.index.json` → modrinth，有带 `minecraft` 段的 `manifest.json` → curse，都没有 → zip | `""` | `curse` |
 | `formatSpecific.ignoreProject` | 按**平台身份**忽略（`curse` 与 `modrinth` 均支持；Modrinth 包型会同时用于「不下载」与「跳过客户端判定」）；可写 Modrinth 项目 ID/slug、CurseForge 项目 ID/文件 ID，详见下方「ignoreProject 写法」。**按文件名忽略请用 `ignoreFiles`** | `[]` | `[263420, AANobbMI]` |
 | `baseInstallPath` | 服务器安装基础路径；为空表示当前目录 | `~` | `server/` |
 | `ignoreFiles` | 安装时忽略的文件列表，支持 glob（默认）或 `regex:` / `glob:` 前缀强制匹配类型；`mods/` 前缀项在**下载前**生效（文件名匹配），其余项作用于解压阶段的 overrides 相对路径 | `[]` | `mods/optifine*.jar`、`kubejs/client_scripts/**` |
