@@ -9,6 +9,13 @@ plugins {
 group = 'tk.redteaco'
 version = '2.5.3'
 
+// 归档名统一小写：发布包内是 serverstarter-<版本>.jar，startserver.bat / startserver.sh 与
+// GitHub release 资产名（copyJar / releaseAssets）都按这个名字找。
+// 大小写不一致时 Windows 能凑合（路径不敏感），Linux 上脚本会找不到 jar 并去下载一个不存在的资产
+base {
+    archivesName = 'serverstarter'
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(8)
@@ -114,12 +121,12 @@ tasks.register('zipDist', Zip) {
 
 githubRelease {
     token = getGithubKey()
-    owner = "EdenLeaf"
+    owner = "RedTeaco"
     repo = "ServerStarter"
     targetCommitish = "master"
     overwrite = true
 
-    releaseAssets ("$buildDir/libs/ServerStarter-${version}.jar",file("$buildDir/release/serverstarter-${version}.zip"))
+    releaseAssets ("$buildDir/libs/serverstarter-${version}.jar",file("$buildDir/release/serverstarter-${version}.zip"))
 }
 
 tasks.githubRelease.dependsOn zipDist
