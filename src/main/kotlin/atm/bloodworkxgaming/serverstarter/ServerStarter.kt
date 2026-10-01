@@ -175,10 +175,11 @@ class ServerStarter(args: Array<String>) {
         }
 
         val zip = PackObtainer.obtain(
-                config.install.modpackUrl,
-                config.install.normalizedInstallPath,
-                internetManager,
-                PackObtainer::cursePageDownloadUrl)
+                modpackUrl = config.install.modpackUrl,
+                basePath = config.install.normalizedInstallPath,
+                internetManager = internetManager,
+                cleanUrl = PackObtainer::cursePageDownloadUrl,
+                preferredFormat = null)
         val detected = PackFormatDetector.detectOrZip(zip)
         LOGGER.info("modpackFormat '${config.install.modpackFormat}' -> auto-detected '$detected' from ${zip.name}")
         config.install.modpackFormat = detected

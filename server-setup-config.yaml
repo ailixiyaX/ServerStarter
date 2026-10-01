@@ -56,7 +56,9 @@ install:
   # This supports loading from local files as well for most pack types if there is file://{PathToFile} in the beginning
   # Note: file://{PathToFile} does not need the full path, can be a relative path.
   # E.g: modpackUrl: file://./modpacks/All+the+Mods+7-0.0.21.zip
-  # modpackUrl: "./.zip" means using the zip file located in the same directory.
+  # modpackUrl: "./.zip" means picking a pack file from the same directory: candidates are *.zip / *.mrpack,
+  # files whose content looks like a pack are preferred (modrinth.index.json / manifest.json with minecraft),
+  # the ServerStarter distribution zip is skipped, and the newest file is the final fallback.
   modpackUrl: "./.zip"
 
   # This is used to specify in which format the modpack is distributed, the server launcher has to handle each individually if their format differs

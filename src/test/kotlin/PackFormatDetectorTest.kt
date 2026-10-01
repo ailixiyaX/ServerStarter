@@ -110,6 +110,59 @@ class PackFormatDetectorTest {
     }
 
     @Test
+    fun `目录里同时有启动器分发包时按内容挑出真正的整合包`() {
+        val dir = File(workDir, "pick-by-content").apply { mkdirs() }
+        // 启动器分发包：更新的时间戳，但没有 manifest —— 旧逻辑会错误地挑中它
+        zip("launcher.zip", "startserver.bat" to "@echo off", "serverstarter-2.5.4.jar" to "jar", "server-setup-config.yaml" to "cfg")
+                .renameTo(File(dir, "launcher.zip"))
+        File(dir, "launcher.zip").setLastModified(9_000_000)
+        zip("pack.mrpack", "modrinth.index.json" to """{"formatVersion":1,"files":[]}""")
+                .renameTo(File(dir, "pack.mrpack"))
+        File(dir, "pack.mrpack").setLastModified(1_000_000)
+
+        assertTrue(PackObtainer.isLauncherDistribution(File(dir, "launcher.zip")))
+        assertEquals("pack.mrpack", PackObtainer.findPackIn(dir)?.name)
+        assertEquals("pack.mrpack", PackObtainer.findPackIn(dir, PackFormatDetector.FORMAT_MODRINTH)?.name)
+    }
+
+    @Test
+    fun `显式格式优先于更新的文件`() {
+        val dir = File(workDir, "prefer-format").apply { mkdirs() }
+        zip("newer.mrpack", "modrinth.index.json" to """{"formatVersion":1,"files":[]}""")
+                .renameTo(File(dir, "newer.mrpack"))
+        File(dir, "newer.mrpack").setLastModified(9_000_000)
+        zip("older.zip", "manifest.json" to """{"minecraft":{"version":"1.21.1"}}""")
+                .renameTo(File(dir, "older.zip"))
+        File(dir, "older.zip").setLastModified(1_000_000)
+
+        assertEquals("older.zip", PackObtainer.findPackIn(dir, PackFormatDetector.FORMAT_CURSE)?.name)
+        assertEquals("newer.mrpack", PackObtainer.findPackIn(dir, PackFormatDetector.FORMAT_MODRINTH)?.name)
+    }
+
+    @Test
+    fun `都识别不出格式时回落到最新（纯 zip 包型）`() {
+        val dir = File(workDir, "fallback-newest").apply { mkdirs() }
+        File(dir, "a.zip").writeText("x"); File(dir, "a.zip").setLastModified(1_000_000)
+        File(dir, "b.zip").writeText("x"); File(dir, "b.zip").setLastModified(2_000_000)
+
+        assertEquals("b.zip", PackObtainer.findPackIn(dir)?.name)
+    }
+
+    @Test
+    fun `目录里只有启动器分发包时仍按旧规则兜底并告警`() {
+        val dir = File(workDir, "only-launcher").apply { mkdirs() }
+        zip("launcher.zip", "startserver.sh" to "#!/bin/sh")
+                .renameTo(File(dir, "launcher.zip"))
+
+        assertEquals("launcher.zip", PackObtainer.findPackIn(dir)?.name)
+    }
+
+    @Test
+    fun `findPackIn 在空目录返回 null`() {
+        assertEquals(null, PackObtainer.findPackIn(File(workDir, "empty-scan")))
+    }
+
+    @Test
     fun `newestPackIn 找不到整合包时返回 null`() {
         val dir = File(workDir, "empty-scan").apply { mkdirs() }
         File(dir, "readme.txt").writeText("x")

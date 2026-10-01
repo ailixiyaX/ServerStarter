@@ -35,7 +35,12 @@ abstract class AbstractZipbasedPackType(private val configFile: ConfigFile, prot
             ServerStarter.LOGGER.info("Reusing the modpack file obtained for format detection: " + it.absolutePath)
             return it
         }
-        return PackObtainer.obtain(configFile.install.modpackUrl, basePath, internetManager, ::cleanUrl)
+        return PackObtainer.obtain(
+                modpackUrl = configFile.install.modpackUrl,
+                basePath = basePath,
+                internetManager = internetManager,
+                cleanUrl = ::cleanUrl,
+                preferredFormat = configFile.install.modpackFormat)
     }
 
     /**
