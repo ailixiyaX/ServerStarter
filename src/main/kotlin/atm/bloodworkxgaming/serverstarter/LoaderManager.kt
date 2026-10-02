@@ -178,7 +178,20 @@ class LoaderManager(private val configFile: ConfigFile, private val internetMana
                     installForge(basePath, url, installerPath, installerArguments)
                 }
             } else {
-                installForge(basePath, url, installerPath, installerArguments)
+                try {
+                    installForge(basePath, url, installerPath, installerArguments)
+                } catch (e: Exception) {
+                    // 官方源失败时自动再走一次镜像（bmclapi），与上面「镜像失败 → 官方」对称。
+                    // 镜像安装不支持老式 fat installer，那种情况下会再抛出原始错误。
+                    LOGGER.warn("Failed to install the loader from the official source (${e.message}), retrying through the BMCLAPI mirror")
+                    try {
+                        mirrorInstall(basePath, url, loaderVersion, mcVersion)
+                        true
+                    } catch (mirrorError: Exception) {
+                        LOGGER.error("Mirror fallback failed as well (${mirrorError.message}), giving up")
+                        throw e
+                    }
+                }
             }
 
         lockFile.loaderInstalled = true
