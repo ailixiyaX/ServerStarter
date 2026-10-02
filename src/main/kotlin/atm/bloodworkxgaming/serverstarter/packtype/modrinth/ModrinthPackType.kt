@@ -87,8 +87,10 @@ open class ModrinthPackType(private val configFile: ConfigFile, internetManager:
                     loaderKey = deps.keySet().firstOrNull { key -> key != "minecraft" && deps.get(key)?.isJsonPrimitive == true }
                 }
                 val loader = loaderKey?.let { key -> deps.get(key)?.takeIf { it.isJsonPrimitive }?.asString }
+                // fabric-loader / quilt-loader → fabric / quilt（installerUrl 推导要 loader 名）
+                val loaderName = loaderKey?.lowercase()?.removeSuffix("-loader")
 
-                return ManifestVersions(mc, loader)
+                return ManifestVersions(mc, loader, loaderName)
             }
         }
     }

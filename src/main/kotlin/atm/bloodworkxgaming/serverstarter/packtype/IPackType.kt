@@ -11,13 +11,17 @@ import java.io.File
 
 /**
  * 最终生效版本（Q3：整合包 manifest 优先、yaml 兜底）。
+ *
+ * [loaderName] 是 loader 名（`forge` / `neoforge` / `fabric`），`installerUrl` 留空时用它推导安装器地址；
+ * 版本来自 yaml 时没有名字，保持 null（那串本身可能写成 `neoforge-21.1.249`，由 LoaderDefaults 再解析）。
  */
-data class PackVersions(val mcVersion: String, val loaderVersion: String)
+data class PackVersions(val mcVersion: String, val loaderVersion: String, val loaderName: String? = null)
 
 /**
  * 从整合包 manifest 解析出的原始版本，字段为 null 表示 manifest 未提供对应版本。
+ * [loaderVersion] 是裸版本号（如 `21.1.249`），[loaderName] 是 loader 名（如 `neoforge`）。
  */
-data class ManifestVersions(val mcVersion: String?, val loaderVersion: String?)
+data class ManifestVersions(val mcVersion: String?, val loaderVersion: String?, val loaderName: String? = null)
 
 interface IPackType {
     companion object {

@@ -76,7 +76,9 @@ abstract class AbstractZipbasedPackType(private val configFile: ConfigFile, prot
                 missingMessage = "无法确定 loader 版本：整合包 manifest 未提供且 yaml loaderVersion 为空"
         )
 
-        return PackVersions(mcVersion, loaderVersion)
+        val loaderFromManifest = !manifest?.loaderVersion.isNullOrEmpty()
+
+        return PackVersions(mcVersion, loaderVersion, if (loaderFromManifest) manifest?.loaderName else null)
     }
 
     /**

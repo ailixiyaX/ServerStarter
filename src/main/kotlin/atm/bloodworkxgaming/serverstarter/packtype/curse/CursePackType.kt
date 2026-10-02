@@ -58,12 +58,16 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
                         ?: return ManifestVersions(null, null)
 
                 val mc = mcObj.get("version")?.takeIf { it.isJsonPrimitive }?.asString
-                val loader = mcObj.get("modLoaders")?.takeIf { it.isJsonArray }?.asJsonArray
+                // modLoaders[0].id：neoforge-21.1.249 → 名字 neoforge + 版本 21.1.249
+                // （forge-1.12.2-14.23.5.2859 同理：名字 forge，版本取最后一段）
+                val loaderId = mcObj.get("modLoaders")?.takeIf { it.isJsonArray }?.asJsonArray
                         ?.takeIf { it.size() > 0 }?.get(0)?.asJsonObject
                         ?.get("id")?.takeIf { it.isJsonPrimitive }?.asString
-                        ?.substringAfterLast("-")
 
-                return ManifestVersions(mc, loader)
+                return ManifestVersions(
+                        mc,
+                        loaderId?.substringAfterLast("-"),
+                        loaderId?.substringBefore("-")?.lowercase())
             }
         }
     }

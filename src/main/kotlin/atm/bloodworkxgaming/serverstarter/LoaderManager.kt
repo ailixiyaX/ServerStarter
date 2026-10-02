@@ -9,6 +9,7 @@ import atm.bloodworkxgaming.serverstarter.mirror.core.LibraryDownloadTask
 import atm.bloodworkxgaming.serverstarter.mirror.download.DownloadProviders
 import atm.bloodworkxgaming.serverstarter.mirror.installer.*
 import atm.bloodworkxgaming.serverstarter.util.ByteProgressReporter
+import atm.bloodworkxgaming.serverstarter.util.LoaderDefaults
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import org.apache.commons.io.FileUtils
@@ -135,10 +136,33 @@ class LoaderManager(private val configFile: ConfigFile, private val internetMana
 
     }
 
-    fun installLoader(basePath: String, loaderVersion: String, mcVersion: String): Boolean {
-        val url = configFile.install.installerUrl
-            .replace("{{@loaderversion@}}", loaderVersion)
-            .replace("{{@mcversion@}}", mcVersion)
+    fun installLoader(basePath: String, loaderVersion: String, mcVersion: String, loaderName: String? = null): Boolean {
+        // installerUrl 留空时按 manifest 给出的 loader 名与版本推导（见 LoaderDefaults），用户不必再手改
+        val loader = LoaderDefaults.resolveLoader(loaderName, loaderVersion)
+        if (configFile.install.installerUrl.isBlank() && loader == null) {
+            throw InitException(
+                    "installerUrl is empty and the loader could not be derived from the pack " +
+                            "(loader name '$loaderName', version '$loaderVersion'); " +
+                            "please set install.installerUrl in the config, or set loaderVersion to something " +
+                            "like 'neoforge-21.1.249' so it can be derived")
+        }
+
+        val autoDetect = configFile.install.installerUrl.isBlank()
+        val derivedUrl = if (autoDetect) LoaderDefaults.installerUrl(loader!!, mcVersion) else null
+        if (autoDetect && derivedUrl == null) {
+            throw InitException(
+                    "Could not derive an installer url for loader '${loader!!.name}', please set install.installerUrl in the config")
+        }
+
+        val url = (derivedUrl ?: configFile.install.installerUrl)
+                .replace("{{@loaderversion@}}", loaderVersion)
+                .replace("{{@mcversion@}}", mcVersion)
+        if (autoDetect) {
+            LOGGER.info("installerUrl is empty, derived from the pack loader '${loader!!.name}-${loader.version}': $url")
+        }
+        val installerArguments =
+            if (autoDetect) LoaderDefaults.installerArguments(loader!!) else configFile.install.installerArguments
+
         var installerPath = File(basePath + "installer.jar")
         val result: Boolean =
             if (url.contains("fabric")) {
@@ -151,10 +175,10 @@ class LoaderManager(private val configFile: ConfigFile, private val internetMana
                     true
                 } catch (e: Exception) {
                     LOGGER.warn("镜像安装失败，回退 --installServer: ${e.message}")
-                    installForge(basePath, url, installerPath)
+                    installForge(basePath, url, installerPath, installerArguments)
                 }
             } else {
-                installForge(basePath, url, installerPath)
+                installForge(basePath, url, installerPath, installerArguments)
             }
 
         lockFile.loaderInstalled = true
@@ -213,7 +237,7 @@ class LoaderManager(private val configFile: ConfigFile, private val internetMana
         return true
     }
 
-    fun installForge(basePath: String,url:String,installerPath:File): Boolean {
+    fun installForge(basePath: String, url: String, installerPath: File, installerArguments: List<String>): Boolean {
         try {
             LOGGER.info("Attempting to download installer from $url")
             internetManager.downloadToFile(url, installerPath, ByteProgressReporter())
@@ -226,7 +250,7 @@ class LoaderManager(private val configFile: ConfigFile, private val internetMana
                 java,
                 "-jar",
                 installerPath.absolutePath,
-                *configFile.install.installerArguments.toTypedArray()
+                *installerArguments.toTypedArray()
             )
                 .inheritIO()
                 .directory(File(basePath))

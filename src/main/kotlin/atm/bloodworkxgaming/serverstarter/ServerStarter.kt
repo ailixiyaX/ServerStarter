@@ -212,7 +212,7 @@ class ServerStarter(args: Array<String>) {
                 val zip = packtype.obtainPack()                    // ① 下载/定位整合包 zip
                 val versions = packtype.resolveVersions(zip)       // ② 从 zip 解析最终生效版本（不落盘）
                 if (config.install.installLoader) {                // ③ 先装 loader，失败即中止（模组一个都不下载）
-                    loaderManager.installLoader(config.install.normalizedInstallPath, versions.loaderVersion, versions.mcVersion)
+                    loaderManager.installLoader(config.install.normalizedInstallPath, versions.loaderVersion, versions.mcVersion, versions.loaderName)
                 }
                 packtype.installPack(zip)                          // ④ 解压 + 模组
             } else if (config.install.installLoader) {
