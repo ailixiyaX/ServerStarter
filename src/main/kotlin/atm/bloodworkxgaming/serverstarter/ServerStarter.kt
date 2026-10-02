@@ -7,6 +7,7 @@ import atm.bloodworkxgaming.serverstarter.packtype.AbstractZipbasedPackType
 import atm.bloodworkxgaming.serverstarter.packtype.IPackType
 import atm.bloodworkxgaming.serverstarter.util.AppVersion
 import atm.bloodworkxgaming.serverstarter.util.ClientOnlyModFilter
+import atm.bloodworkxgaming.serverstarter.util.ConfigKeyValidator
 import atm.bloodworkxgaming.serverstarter.util.PackFormatDetector
 import atm.bloodworkxgaming.serverstarter.util.PackObtainer
 import atm.bloodworkxgaming.serverstarter.yaml.CustomConstructor
@@ -65,10 +66,15 @@ class ServerStarter(args: Array<String>) {
         private fun readConfig(): ConfigFile {
             val yaml = Yaml(CustomConstructor(ConfigFile::class.java), rep, options)
 
+            val text: String
             val file: ConfigFile?
 
             try {
-                file = File("server-setup-config.yaml").inputStream().use { yaml.load(it) }
+                text = File("server-setup-config.yaml").readText(Charsets.UTF_8)
+                // snakeyaml 遇到不认识的键只会抛出 "Unable to find property 'xxx' on class: ..."，
+                // 既不说层级也不说该写什么；这里先给出带路径与建议的清单（必须在 load 之前）
+                ConfigKeyValidator.warnUnknownKeys(text, ConfigFile::class.java)
+                file = yaml.load(text)
             } catch (e: FileNotFoundException) {
                 LOGGER.error("There is no config file given.", e)
                 throw RuntimeException("No config file given.", e)
