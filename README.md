@@ -17,7 +17,7 @@
 
 - **Multi-loader support**: Forge, NeoForge and Fabric can all be installed and launched; `installerUrl` supports placeholder templates, so a single configuration works across multiple loaders.
 - **Multiple modpack formats**: Supports `curseforge`, `modrinth`, `zip` and more; modpacks can be downloaded from an online URL or used from a local file via `file://`.
-- **Automatic client-only mod filtering**: During installation, client-only mods (e.g. Sodium) are automatically removed based on CurseForge client/server markers, Modrinth platform environment info, and the TOML files inside mod jars.
+- **Automatic client-only mod filtering**: During installation, client-only mods (e.g. Sodium, MaFgLib, Just Enough Characters) are automatically removed based on CurseForge client/server markers, Modrinth platform environment info (including a sha1 hash lookup for jars shipped directly inside the pack's `overrides/mods/`), and the TOML files inside mod jars. A server that is already installed re-checks `mods/` before each launch whenever that folder changed (the result is recorded in `.serverstarter-clientmods` in the install directory).
 - **Server process management**: Automatic restart on crash, restart limits (prevents infinite crash loops), Linux RAMDisk support, automatic EULA handling, and automatic lookup of a suitable JVM on PATH according to `supportedJavaVersions`.
 - **BMCLAPI mirror support**: With `install.downloadSource: bmclapi`, the entire NeoForge / Forge installation process and downloads of vanilla-related resources are completed in-process through the BMCLAPI mirror, which is especially useful when official sources are slow or unreachable; if the mirror install fails, it automatically falls back to the official process.
 - **Cross-platform launcher scripts**: `startserver.bat` (Windows) and `startserver.sh` (Linux) are distributed with each Release. The scripts automatically download the matching version of the main program and run it, so no manual jar preparation is needed.
@@ -186,7 +186,7 @@ MC ≤ 1.16 needs Java 8, MC ≥ 1.17 needs Java 17 / 21. List the allowed versi
 
 ### Client-only mods got installed onto the server / were removed by mistake?
 
-The program filters client-only mods based on CurseForge client/server markers, Modrinth platform environment info, and TOML rules; when information is uncertain, it uses a fail-safe strategy (keeps the mod). For precise control:
+The program filters client-only mods based on CurseForge client/server markers, Modrinth platform environment info (a sha1 hash lookup also covers jars that the pack ships directly in `overrides/mods/`), and TOML rules; when information is uncertain, it uses a fail-safe strategy (keeps the mod). It runs once at the end of an install, and an already installed server re-checks before launch whenever `mods/` changed (unchanged folders are skipped; the marker is `.serverstarter-clientmods` in the install directory), so an old server just needs this program to be updated. For precise control:
 - use `install.formatSpecific.ignoreProject` to ignore entire projects by platform identity: the curse pack type
   takes CurseForge project IDs, while the modrinth pack type also accepts Modrinth project ID/slug and
   CurseForge project ids (see "ignoreProject forms");

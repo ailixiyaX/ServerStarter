@@ -6,10 +6,13 @@ import atm.bloodworkxgaming.serverstarter.logger.PrimitiveLogger
 import atm.bloodworkxgaming.serverstarter.packtype.AbstractZipbasedPackType
 import atm.bloodworkxgaming.serverstarter.packtype.IPackType
 import atm.bloodworkxgaming.serverstarter.packtype.ManifestVersions
+import atm.bloodworkxgaming.serverstarter.util.ApiVerdict
 import atm.bloodworkxgaming.serverstarter.util.AppVersion
+import atm.bloodworkxgaming.serverstarter.util.ClientModScanState
 import atm.bloodworkxgaming.serverstarter.util.ClientOnlyModFilter
 import atm.bloodworkxgaming.serverstarter.util.ConsoleOutput
 import atm.bloodworkxgaming.serverstarter.util.ConfigKeyValidator
+import atm.bloodworkxgaming.serverstarter.util.ModrinthClientModScan
 import atm.bloodworkxgaming.serverstarter.util.PackFormatDetector
 import atm.bloodworkxgaming.serverstarter.util.PackObtainer
 import atm.bloodworkxgaming.serverstarter.yaml.CustomConstructor
@@ -286,7 +289,10 @@ class ServerStarter(args: Array<String>) {
 
 
         val loaderManager = LoaderManager(config, internetManager)
+        var platformVerdicts: Map<String, ApiVerdict> = emptyMap()
+        var installedNow = false
         if (lockFile.checkShouldInstall(config) || installOnly) {
+            installedNow = true
             val resolved = resolvePackFormat(internetManager)
             val packtype = IPackType.createPackType(resolved.format, config, internetManager)
                     ?: throw InitException("Unknown pack format given in config, shutting down.")
@@ -331,17 +337,17 @@ class ServerStarter(args: Array<String>) {
             fileManager.installAdditionalFiles()
             fileManager.installLocalFiles()
 
-            // 客户端模组清理：安装末尾扫描 mods/ 目录，删除客户端专用模组。
-            // （curse 下载阶段已有 CF 三态预过滤；此处为最终兜底：TOML 规则 + CF 冲突仲裁）
-            ClientOnlyModFilter.removeClientOnlyMods(
-                    File(config.install.normalizedInstallPath + "mods/"),
-                    packtype.apiVerdictsByFile
-            )
+            // 平台（CF 三态）判定留给安装末尾的统一清理；此处只记住结果
+            platformVerdicts = packtype.apiVerdictsByFile
 
 
         } else {
             LOGGER.info("Server is already installed to correct version, to force install delete the serverstarter.lock File.")
         }
+
+        // 客户端模组清理：安装末尾跑（带 CF 三态判定），已装好的服务器启动前也补跑一次
+        // （只带 mods.toml + Modrinth 哈希反查判定，非交互）。
+        enforceClientMods(internetManager, platformVerdicts, force = installedNow)
 
         if (installOnly) {
             LOGGER.info("Install only mod, exiting now.")
@@ -349,6 +355,47 @@ class ServerStarter(args: Array<String>) {
         }
 
         loaderManager.handleServer()
+    }
+
+    /**
+     * 删除 mods/ 里客户端专用的模组（详见 [ClientOnlyModFilter]）。
+     *
+     * 判定来源：
+     * - mods.toml / fabric.mod.json（jar 自带）
+     * - 平台判定：CF 三态（仅安装时拿得到）、Modrinth sha1 反查（服务器已装好也能查）
+     *
+     * mods/ 指纹记在安装目录的 .serverstarter-clientmods 里；指纹没变就跳过，
+     * 免得上百个 jar 每次启动都重新哈希 + 联网。扫描不完整（网络失败）时不写标记，下次再试。
+     *
+     * @param force 安装刚跑完时强制重扫：那时有 CF 三态判定，口径最完整
+     */
+    private fun enforceClientMods(internetManager: InternetManager, platformVerdicts: Map<String, ApiVerdict>, force: Boolean) {
+        val installPath = config.install.normalizedInstallPath
+        val modsDir = File(installPath + "mods/")
+        val marker = File(installPath + ".serverstarter-clientmods")
+        if (!force && ClientModScanState.fingerprint(modsDir) == ClientModScanState.read(marker)) {
+            LOGGER.info("Client mod check already done for this mods folder, skipping.")
+            return
+        }
+        val modrinth = try {
+            ModrinthClientModScan.scan(
+                    modsDir,
+                    platformVerdicts.keys,
+                    { url, body -> internetManager.postJson(url, body) },
+                    { url -> internetManager.get(url) }
+            )
+        } catch (e: Exception) {
+            LOGGER.warn("Platform client-mod check failed, keeping mods untouched: " + e.message)
+            ModrinthClientModScan.ScanResult(emptyMap(), false)
+        }
+        ClientOnlyModFilter.removeClientOnlyMods(
+                modsDir,
+                platformVerdicts + modrinth.verdicts,
+                if (force) ({ readlnOrNull() }) else ({ null })
+        )
+        if (modrinth.complete) {
+            ClientModScanState.write(marker, ClientModScanState.fingerprint(modsDir))
+        }
     }
 }
 

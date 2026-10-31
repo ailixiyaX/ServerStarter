@@ -17,7 +17,7 @@
 
 - **多加载器支持**：Forge、NeoForge、Fabric 均可安装与启动，`installerUrl` 支持占位符模板，一套配置适配多种加载器。
 - **多整合包格式**：支持 `curseforge`、`modrinth`、`zip` 等格式；整合包既可以从在线 URL 下载，也可以通过 `file://` 使用本地文件。
-- **客户端专用模组自动过滤**：安装时依据 CurseForge 的客户端/服务端标记、Modrinth 平台环境信息以及 模组文件中的TOML文件，自动剔除仅客户端模组（如Sodium）。
+- **客户端专用模组自动过滤**：安装时依据 CurseForge 的客户端/服务端标记、Modrinth 平台环境信息（含按 sha1 反查整合包 `overrides/mods/` 里直接带的 jar）以及模组文件中的 TOML 文件，自动剔除仅客户端模组（如 Sodium、MaFgLib、Just Enough Characters）；已经装好的服务器在 `mods/` 有变化时也会在启动前补跑一次（清理记录存放在安装目录的 `.serverstarter-clientmods`）。
 - **服务器进程管理**：崩溃自动重启、重启次数限制（防无限崩溃循环）、Linux RAMDisk 支持、EULA 自动处理、按 `supportedJavaVersions` 自动在 PATH 中查找合适的 JVM。
 - **BMCLAPI 镜像支持**：设置 `install.downloadSource: bmclapi` 后，NeoForge / Forge 的整个安装过程及原版相关资源的下载可通过 BMCLAPI 镜像站进程内完成，官方源慢或不可达的网络环境下尤其有用；镜像安装失败会自动回退官方流程。
 - **跨平台启动脚本**：随 Release 分发 `startserver.bat`（Windows）与 `startserver.sh`（Linux），脚本会自动下载对应版本的主程序并执行，无需手动准备 jar。
@@ -183,7 +183,7 @@ MC ≤ 1.16 需要 Java 8，MC ≥ 1.17 需要 Java 17 / 21。可在 `launch.sup
 
 ### 客户端专用模组被装进服务器 / 被误删？
 
-程序会依据 CurseForge 的客户端/服务端标记、Modrinth 平台环境信息与 TOML 规则过滤客户端专用模组；信息不确定时采用 fail-safe 策略（保留模组）。如需精确控制：
+程序会依据 CurseForge 的客户端/服务端标记、Modrinth 平台环境信息（按 sha1 反查也覆盖整合包直接放在 `overrides/mods/` 里的 jar）与 TOML 规则过滤客户端专用模组；信息不确定时采用 fail-safe 策略（保留模组）。安装结束会扫描一次，已经装好的服务器在 `mods/` 有变化时也会在启动前补扫（跳过没变过的目录，标记文件是安装目录下的 `.serverstarter-clientmods`），所以旧服务器换上本程序后直接启动即可清理。如需精确控制：
 - 用 `install.formatSpecific.ignoreProject` 按平台身份忽略整个项目：curse 包型写 CurseForge 项目 ID，
   modrinth 包型可写 Modrinth 项目 ID/slug 或 CurseForge 项目 ID/文件 ID（见「ignoreProject 写法」）；
 - 用 `install.ignoreFiles` 按文件名排除/保留具体文件（见「ignoreFiles 写法」）；

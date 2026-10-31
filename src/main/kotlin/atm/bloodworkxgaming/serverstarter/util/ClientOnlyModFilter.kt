@@ -35,8 +35,9 @@ enum class ApiVerdict(val display: String) {
  *   - 无 minecraft 块 → 取首个带 side 字段的块的 side。
  *   - 最终 side == "CLIENT"（忽略大小写）→ 客户端专用；否则保留。
  *   - 读不到任何块（坏 TOML）→ UNKNOWN（保留，fail-safe）。
- * - 综合决策：无 CF 判定（modrinth/zip/本地）→ 仅按 TOML 规则；CF 与 TOML 不一致
- *   （CF=缺省/双端 × TOML=CLIENT）→ LOGGER 提示用户 Y/N 仲裁（EULA 同款青色）；
+ * - 综合决策：TOML=CLIENT 且无平台判定 → 删；平台判定（CF 三态 / Modrinth 哈希反查）给出
+ *   CLIENT_ONLY 时，TOML 标的 BOTH 不算数 → 删（overrides 里的 jar 常这么标）；
+ *   CF=缺省/双端 × TOML=CLIENT → LOGGER 提示用户 Y/N 仲裁（EULA 同款青色）；
  *   EOF/非法输入按 fail-safe 保留或重问。
  *
  * 处置：仅删除判定为客户端专用的 jar；无元数据 / 解析失败一律保留（宁漏勿误）。
@@ -110,10 +111,11 @@ object ClientOnlyModFilter {
                 LOGGER.info("Unable to determine mod environment, keeping: " + jar.name)
             }
 
-            if (decideToDelete(jar, metadata, cf, input)) {
+            val decision = decideToDelete(jar, metadata, cf, input)
+            if (decision.delete) {
                 if (jar.delete()) {
                     removed++
-                    LOGGER.info("Deleting client-only mods: " + jar.name + " (" + metadata.detail() + ")")
+                    LOGGER.info("Deleting client-only mods: " + jar.name + " (" + decision.reason + ")")
                 } else {
                     LOGGER.error("Failed to delete client-only mods (file may be in use): " + jar.absolutePath)
                 }
@@ -123,25 +125,40 @@ object ClientOnlyModFilter {
         LOGGER.info("Client mod cleanup completed: scanned " + jars.size + " mods, removed " + removed + ".")
     }
 
+    /** 决策结果：是否删除 + 日志里的判定依据。 */
+    private data class Decision(val delete: Boolean, val reason: String)
+
     /**
-     * 综合决策：返回 true=删除、false=保留。
+     * 综合决策。
      *
-     * - Fabric 独立规则：CLIENT_ONLY → 删；其余 → 保留（不弹提示）。
+     * - Fabric：环境=client → 删；否则看平台判定（CF 三态 / Modrinth 哈希反查）。
      * - TOML：CLIENT_ONLY 时按 CF 判定——无 CF → 删；CF=CLIENT_ONLY → 删（一致，防御分支）；
-     *   CF=缺省/双端 → 冲突提示；TOML 非 CLIENT → 保留。
+     *   CF=缺省/双端 → 冲突提示；TOML 非 CLIENT 但平台判定 CLIENT_ONLY → 删
+     *   （整合包 overrides 里的 jar 常把 side 标成 BOTH，实际只在客户端可用）。
+     * - 读不到任何元数据（None）→ 保留（由调用方保持 fail-safe）。
      */
-    private fun decideToDelete(jar: File, metadata: JarMetadata, cf: ApiVerdict?, input: () -> String?): Boolean {
+    private fun decideToDelete(jar: File, metadata: JarMetadata, cf: ApiVerdict?, input: () -> String?): Decision {
         return when (metadata) {
-            is JarMetadata.Fabric -> metadata.verdict.verdict == Verdict.CLIENT_ONLY
+            is JarMetadata.Fabric -> when {
+                metadata.verdict.verdict == Verdict.CLIENT_ONLY ->
+                    Decision(true, metadata.detail() ?: "fabric environment=client")
+                cf == ApiVerdict.CLIENT_ONLY ->
+                    Decision(true, "platform says CLIENT, fabric.mod.json has no client environment: " + metadata.detail())
+                else -> Decision(false, "")
+            }
             is JarMetadata.Toml -> when (metadata.verdict.verdict) {
                 Verdict.CLIENT_ONLY -> when (cf) {
-                    null -> true
-                    ApiVerdict.CLIENT_ONLY -> true
-                    else -> askUserDelete(cf, jar.name, input)
+                    null -> Decision(true, metadata.detail() ?: "mods.toml side=CLIENT")
+                    ApiVerdict.CLIENT_ONLY -> Decision(true, metadata.detail() ?: "mods.toml side=CLIENT")
+                    else -> Decision(askUserDelete(cf, jar.name, input), metadata.detail() ?: "mods.toml side=CLIENT")
                 }
-                else -> false
+                else -> if (cf == ApiVerdict.CLIENT_ONLY) {
+                    Decision(true, "platform says CLIENT, " + (metadata.detail() ?: "mods.toml side is not CLIENT"))
+                } else {
+                    Decision(false, "")
+                }
             }
-            JarMetadata.None -> false
+            JarMetadata.None -> Decision(false, "")
         }
     }
 
