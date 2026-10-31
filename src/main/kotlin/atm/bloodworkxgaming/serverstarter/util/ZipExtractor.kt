@@ -33,8 +33,29 @@ class ZipExtractor(
         private val manifestTargetName: String? = null,
         private val overridesPrefix: String? = "overrides/",
         private val moveModsFolderFirst: Boolean = true,
-        private val rethrowOnError: Boolean = true
+        private val rethrowOnError: Boolean = true,
+        /** 启动器实例导出：跳过只对客户端有意义的文件（saves/、logs/、resourcepacks/、options.txt ...） */
+        private val skipInstanceEntries: Boolean = false
 ) {
+    private companion object {
+        /** 实例里只对客户端有意义的单个文件（相对于游戏目录）。 */
+        private val INSTANCE_ONLY_FILES = setOf(
+                "options.txt", "optionsof.txt", "optionsshaders.txt", "servers.dat", "usercache.json",
+                "launcher_profiles.json", "realms_persistence.json", "icon.png", "instance.cfg",
+                "mmc-pack.json", "modlist.html")
+
+        /** 实例里只对客户端有意义的目录（相对于游戏目录）。 */
+        private val INSTANCE_ONLY_DIRS = setOf(
+                "saves", "screenshots", "logs", "crash-reports", "resourcepacks", "shaderpacks",
+                "replay_recordings", "lunaui", "profileimage", ".cache")
+
+        /** 服务器用不到、属于启动器实例本身的条目（路径已剥离 overrides 前缀）。 */
+        private fun isInstanceOnly(relPath: String): Boolean {
+            val first = relPath.substringBefore('/').lowercase()
+            return if (relPath.contains('/')) first in INSTANCE_ONLY_DIRS else first in INSTANCE_ONLY_FILES
+        }
+    }
+
     /**
      * 解压整合包，返回真正写进磁盘的文件数。
      *
@@ -58,6 +79,7 @@ class ZipExtractor(
 
         LOGGER.info("Starting to unzip files.")
         var extractedEntries = 0
+        var skippedInstanceEntries = 0
         val topLevelDirs = sortedSetOf<String>()
         // unzip start
         try {
@@ -93,6 +115,11 @@ class ZipExtractor(
                         val safeTarget = ZipPathSafety.resolveInside(File(basePath), relPath)
 
                         when {
+                            skipInstanceEntries && isInstanceOnly(relPath) -> {
+                                skippedInstanceEntries++
+                                LOGGER.info("Skipping launcher instance file a server does not need: $relPath", true)
+                            }
+
                             pathMatchers.any { it.matches(Paths.get(relPath)) } ->
                                 LOGGER.info("Skipping $relPath as it is on the ignore List.", true)
 
@@ -135,6 +162,10 @@ class ZipExtractor(
             else topLevelDirs.joinToString(", ") { "$it/" }
             LOGGER.warn("${file.name}: nothing was extracted (extraction prefix '$prefix', top level entries: $topLevel). " +
                     "The pack content does not match the expected layout; set modpackFormat: auto or fix overrides prefix.")
+        }
+        if (skippedInstanceEntries > 0) {
+            LOGGER.info("Skipped $skippedInstanceEntries launcher instance file(s) a server does not need " +
+                    "(saves/, logs/, resourcepacks/, options.txt ...)")
         }
         LOGGER.info("Done unzipping the files, $extractedEntries file(s) extracted.")
         return extractedEntries

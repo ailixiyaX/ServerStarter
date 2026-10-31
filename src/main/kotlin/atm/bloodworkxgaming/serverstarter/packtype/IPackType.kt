@@ -5,6 +5,7 @@ import atm.bloodworkxgaming.serverstarter.config.ConfigFile
 import atm.bloodworkxgaming.serverstarter.packtype.curse.CurseIDPackType
 import atm.bloodworkxgaming.serverstarter.packtype.curse.CursePackType
 import atm.bloodworkxgaming.serverstarter.packtype.modrinth.ModrinthPackType
+import atm.bloodworkxgaming.serverstarter.packtype.prism.PrismPackType
 import atm.bloodworkxgaming.serverstarter.packtype.zip.ZipFilePackType
 import atm.bloodworkxgaming.serverstarter.util.ApiVerdict
 import java.io.File
@@ -31,7 +32,10 @@ interface IPackType {
                 Pair("modrinth", ::ModrinthPackType),
                 Pair("curseid", ::CurseIDPackType),
                 Pair("zip", ::ZipFilePackType),
-                Pair("zipfile", ::ZipFilePackType)
+                Pair("zipfile", ::ZipFilePackType),
+                // Prism / MultiMC 启动器导出的实例（mmc-pack.json + 已展开的 minecraft/）
+                Pair("prism", ::PrismPackType),
+                Pair("multimc", ::PrismPackType)
         )
 
         fun createPackType(packTypeName: String, configFile: ConfigFile, internetManager: InternetManager): IPackType? {

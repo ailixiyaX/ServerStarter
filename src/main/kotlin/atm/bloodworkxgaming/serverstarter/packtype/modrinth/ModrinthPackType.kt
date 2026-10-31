@@ -44,7 +44,8 @@ open class ModrinthPackType(private val configFile: ConfigFile, internetManager:
                 overridesPrefix = overridesPrefixOverride ?: "overrides/",
                 manifestTargetName = "modrinth.index.json",
                 moveModsFolderFirst = true,
-                rethrowOnError = true
+                rethrowOnError = true,
+                skipInstanceEntries = instanceExportMode
         ).extract(file)
     }
 

@@ -5,6 +5,7 @@ import atm.bloodworkxgaming.serverstarter.config.LockFile
 import atm.bloodworkxgaming.serverstarter.logger.PrimitiveLogger
 import atm.bloodworkxgaming.serverstarter.packtype.AbstractZipbasedPackType
 import atm.bloodworkxgaming.serverstarter.packtype.IPackType
+import atm.bloodworkxgaming.serverstarter.packtype.ManifestVersions
 import atm.bloodworkxgaming.serverstarter.util.AppVersion
 import atm.bloodworkxgaming.serverstarter.util.ClientOnlyModFilter
 import atm.bloodworkxgaming.serverstarter.util.ConsoleOutput
@@ -194,7 +195,11 @@ class ServerStarter(args: Array<String>) {
         val inspection = PackFormatDetector.inspect(zip)
         val detected = inspection.format
         LOGGER.info("modpackFormat '${config.install.modpackFormat}' -> auto-detected '$detected' from ${zip.name}")
-        if (inspection.instanceExport) {
+        if (inspection.format == PackFormatDetector.FORMAT_PRISM) {
+            LOGGER.info("检测到 Prism/MultiMC 启动器实例：${inspection.manifestEntry}，游戏目录 ${inspection.overridesPrefix}，" +
+                    "MC ${inspection.mcVersion ?: "?"}，loader ${inspection.loaderName ?: "?"} ${inspection.loaderVersion ?: "?"}；" +
+                    "模组随包自带，不需要下载")
+        } else if (inspection.instanceExport) {
             LOGGER.warn("检测到启动器导出的实例目录：清单在 ${inspection.manifestEntry}，" +
                     "游戏目录已展开为 ${inspection.overridesPrefix}；将把该目录内容作为 overrides 解压，并按清单下载模组")
         } else if (inspection.nestedManifest) {
@@ -222,20 +227,36 @@ class ServerStarter(args: Array<String>) {
             LOGGER.warn("Could not inspect ${localPack.name} (${e.message}); keeping the configured format '$configured' as is")
             return ResolvedPackFormat(configured, null)
         }
-        if (!inspection.nestedManifest && !inspection.instanceExport) {
+        val detected = inspection.format
+        if (detected == PackFormatDetector.FORMAT_ZIP && !inspection.instanceExport) {
             return ResolvedPackFormat(configured, localPack, inspection)
         }
-        if (!inspection.format.equals(configured, ignoreCase = true)) {
-            LOGGER.warn("modpackFormat is '$configured' but ${localPack.name} looks like '${inspection.format}' " +
+        if (!detected.equals(configured, ignoreCase = true)) {
+            val configuredIsPlainZip = configured.equals("zip", true) || configured.equals("zipfile", true)
+            if (configuredIsPlainZip) {
+                // 纯 zip 会把 minecraft/ 原样铺出来（服务器目录里多一层 minecraft/），比"格式写错"更糟
+                LOGGER.warn("modpackFormat is '$configured' but ${localPack.name} is a '$detected' pack " +
+                        "(manifest at ${inspection.manifestEntry}, game files under ${inspection.overridesPrefix}). " +
+                        "Installing it as '$detected' so the files land in the right place.")
+                config.install.modpackFormat = detected
+                return ResolvedPackFormat(detected, localPack, inspection)
+            }
+            LOGGER.warn("modpackFormat is '$configured' but ${localPack.name} looks like '$detected' " +
                     "(manifest at ${inspection.manifestEntry}, game files under ${inspection.overridesPrefix}). " +
                     "Keeping the configured format; set modpackFormat: auto if the install ends up empty.")
             return ResolvedPackFormat(configured, localPack)
         }
-        if (inspection.instanceExport) {
-            LOGGER.warn("The pack is a launcher instance export: manifest at ${inspection.manifestEntry}, " +
-                    "game directory is ${inspection.overridesPrefix}. Extracting with that prefix instead of overrides/.")
-        } else {
-            LOGGER.info("Manifest is nested at ${inspection.manifestEntry}; extracting with prefix ${inspection.overridesPrefix}")
+        when {
+            detected == PackFormatDetector.FORMAT_PRISM ->
+                LOGGER.info("The pack is a launcher instance export (${inspection.manifestEntry}): " +
+                        "game directory ${inspection.overridesPrefix}, MC ${inspection.mcVersion ?: "?"}, " +
+                        "loader ${inspection.loaderName ?: "?"} ${inspection.loaderVersion ?: "?"}. " +
+                        "Its mods are inside the archive, nothing to download.")
+            inspection.instanceExport ->
+                LOGGER.warn("The pack is a launcher instance export: manifest at ${inspection.manifestEntry}, " +
+                        "game directory is ${inspection.overridesPrefix}. Extracting with that prefix instead of overrides/.")
+            inspection.nestedManifest ->
+                LOGGER.info("Manifest is nested at ${inspection.manifestEntry}; extracting with prefix ${inspection.overridesPrefix}")
         }
         return ResolvedPackFormat(configured, localPack, inspection)
     }
@@ -276,6 +297,10 @@ class ServerStarter(args: Array<String>) {
                 (packtype as? AbstractZipbasedPackType)?.apply {
                     manifestEntryNameOverride = inspection.manifestEntry
                     overridesPrefixOverride = inspection.overridesPrefix
+                    instanceExportMode = inspection.instanceExport
+                    instanceVersions = if (inspection.declaresVersions) {
+                        ManifestVersions(inspection.mcVersion, inspection.loaderVersion, inspection.loaderName)
+                    } else null
                 }
             }
             if (config.install.modpackFormat == "modrinth"){

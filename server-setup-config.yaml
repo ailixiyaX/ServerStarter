@@ -67,8 +67,12 @@ install:
   # - modrinth
   # - curseid
   # - zip or zipfile
+  # - prism or multimc: a launcher instance export (instance.cfg + mmc-pack.json + the already unpacked
+  #   game folder in minecraft/ or .minecraft/). The instance's mods are used as-is (nothing is downloaded),
+  #   and launcher-only files (saves/, logs/, resourcepacks/, options.txt ...) are not installed on the server
   # - auto / detect (or leave it empty): the format is detected from the pack contents
-  #   (modrinth.index.json -> modrinth, manifest.json with a minecraft section -> curse, otherwise zip)
+  #   (modrinth.index.json -> modrinth, manifest.json with a minecraft section -> curse,
+  #    mmc-pack.json + a game folder -> prism, otherwise zip)
   modpackFormat: curse
 
   # Settings which are specific to the format used, might not be needed in some casese

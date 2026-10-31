@@ -40,7 +40,8 @@ class ZipExtractorTest {
     private fun installDir(name: String): File = File(tempDir, name).apply { mkdirs() }
 
     private fun extractor(install: File, prefix: String? = "overrides/",
-                          manifestEntry: String? = null, manifestTarget: String? = null) =
+                          manifestEntry: String? = null, manifestTarget: String? = null,
+                          skipInstanceEntries: Boolean = false) =
             ZipExtractor(
                     basePath = install.absolutePath,
                     oldFiles = File(tempDir, "old-${install.name}"),
@@ -48,7 +49,8 @@ class ZipExtractorTest {
                     manifestEntryName = manifestEntry,
                     manifestTargetName = manifestTarget,
                     overridesPrefix = prefix,
-                    moveModsFolderFirst = false)
+                    moveModsFolderFirst = false,
+                    skipInstanceEntries = skipInstanceEntries)
 
     @Test
     fun `剥离 overrides 前缀并返回写入的文件数`() {
@@ -97,5 +99,29 @@ class ZipExtractorTest {
         assertTrue(File(install, "mods/foo.jar").isFile)
         assertFalse(File(install, "flame").exists())
         assertFalse(File(install, "minecraft").exists())
+    }
+
+    @Test
+    fun `实例导出解压时跳过服务器用不到的启动器文件`() {
+        val install = installDir("client-files")
+        val pack = zip("client-files.zip", mapOf(
+                "minecraft/config/x.toml" to "cfg",
+                "minecraft/mods/foo.jar" to "jar",
+                "minecraft/options.txt" to "fov:70",
+                "minecraft/saves/world/level.dat" to "dat",
+                "minecraft/resourcepacks/pack.zip" to "zip",
+                "minecraft/logs/latest.log" to "log",
+                "minecraft/modlist.html" to "html"))
+
+        val extracted = extractor(install, prefix = "minecraft/", skipInstanceEntries = true).extract(pack)
+
+        assertEquals(2, extracted)
+        assertTrue(File(install, "config/x.toml").isFile)
+        assertTrue(File(install, "mods/foo.jar").isFile)
+        assertFalse(File(install, "options.txt").exists())
+        assertFalse(File(install, "saves").exists())
+        assertFalse(File(install, "resourcepacks").exists())
+        assertFalse(File(install, "logs").exists())
+        assertFalse(File(install, "modlist.html").exists())
     }
 }

@@ -41,7 +41,8 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
                 overridesPrefix = overridesPrefixOverride ?: "overrides/",
                 manifestTargetName = "manifest.json",
                 moveModsFolderFirst = true,
-                rethrowOnError = true
+                rethrowOnError = true,
+                skipInstanceEntries = instanceExportMode
         ).extract(file)
     }
 

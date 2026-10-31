@@ -87,6 +87,15 @@ abstract class AbstractZipbasedPackType(private val configFile: ConfigFile, prot
     /** 与 [manifestEntryNameOverride] 配套的解压前缀（`overrides/` / `minecraft/` / `<dir>/`）。 */
     var overridesPrefixOverride: String? = null
 
+    /** 包是启动器实例导出（游戏目录已展开）：解压时跳过只对客户端有意义的文件。 */
+    var instanceExportMode: Boolean = false
+
+    /**
+     * 启动器实例 `mmc-pack.json` 给出的版本。实例导出里的 CurseForge 清单可能没写 modLoaders，
+     * 清单缺项时用它兜底（见 [resolveVersions]）。
+     */
+    var instanceVersions: ManifestVersions? = null
+
     /**
      * ② 从 zip 解析最终生效版本（Q3：manifest 优先、yaml 兜底）。
      *
@@ -95,10 +104,12 @@ abstract class AbstractZipbasedPackType(private val configFile: ConfigFile, prot
      */
     override fun resolveVersions(zip: File): PackVersions {
         val manifest = readManifestVersions(zip)
+        // 实例导出（Prism / MultiMC）：版本以 mmc-pack.json 兜底，清单缺项时不必再让用户手填
+        val fallback = instanceVersions
         val isZipFormat = configFile.install.modpackFormat == "zip" || configFile.install.modpackFormat == "zipfile"
 
         val mcVersion = mergeVersion(
-                manifestValue = manifest?.mcVersion,
+                manifestValue = manifest?.mcVersion?.takeIf { it.isNotEmpty() } ?: fallback?.mcVersion,
                 yamlValue = configFile.install.mcVersion,
                 isZipFormat = isZipFormat,
                 versionName = "MC",
@@ -106,7 +117,7 @@ abstract class AbstractZipbasedPackType(private val configFile: ConfigFile, prot
                 missingMessage = "无法确定 MC 版本：整合包 manifest 未提供且 yaml mcVersion 为空"
         )
         val loaderVersion = mergeVersion(
-                manifestValue = manifest?.loaderVersion,
+                manifestValue = manifest?.loaderVersion?.takeIf { it.isNotEmpty() } ?: fallback?.loaderVersion,
                 yamlValue = configFile.install.loaderVersion,
                 isZipFormat = isZipFormat,
                 versionName = "loader",
@@ -114,9 +125,14 @@ abstract class AbstractZipbasedPackType(private val configFile: ConfigFile, prot
                 missingMessage = "无法确定 loader 版本：整合包 manifest 未提供且 yaml loaderVersion 为空"
         )
 
-        val loaderFromManifest = !manifest?.loaderVersion.isNullOrEmpty()
+        // loader 名跟着"版本从哪来"走：清单给了版本就用清单的名字，否则用 mmc-pack.json 的
+        val loaderName = when {
+            !manifest?.loaderVersion.isNullOrEmpty() -> manifest.loaderName
+            fallback != null && !fallback.loaderVersion.isNullOrEmpty() -> fallback.loaderName
+            else -> manifest?.loaderName
+        }
 
-        return PackVersions(mcVersion, loaderVersion, if (loaderFromManifest) manifest?.loaderName else null)
+        return PackVersions(mcVersion, loaderVersion, loaderName)
     }
 
     /**

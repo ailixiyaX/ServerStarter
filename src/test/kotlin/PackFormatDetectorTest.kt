@@ -171,6 +171,55 @@ class PackFormatDetectorTest {
     }
 
     @Test
+    fun `只有 mmc-pack_json 加游戏目录时判为 prism 实例`() {
+        val pack = zip("prism.zip",
+                "instance.cfg" to "[General]",
+                "mmc-pack.json" to """{"formatVersion":1,"components":[{"uid":"net.minecraft","version":"1.20.1"},{"uid":"net.minecraftforge","version":"47.4.20"}]}""",
+                "minecraft/mods/foo.jar" to "jar")
+
+        val inspection = PackFormatDetector.inspect(pack)
+
+        assertEquals(PackFormatDetector.FORMAT_PRISM, inspection.format)
+        assertEquals("mmc-pack.json", inspection.manifestEntry)
+        assertEquals("minecraft/", inspection.overridesPrefix)
+        assertTrue(inspection.instanceExport)
+        assertTrue(inspection.declaresVersions)
+        assertEquals("1.20.1", inspection.mcVersion)
+        assertEquals("forge", inspection.loaderName)
+        assertEquals("47.4.20", inspection.loaderVersion)
+    }
+
+    @Test
+    fun `启动器实例的 curse 清单配老式 minecraft 目录也能识别`() {
+        val pack = zip("prism-curse.zip",
+                "instance.cfg" to "[General]",
+                "mmc-pack.json" to """{"components":[{"uid":"net.minecraft","version":"1.12.2"}]}""",
+                "flame/manifest.json" to """{"minecraft":{"version":"1.12.2"},"files":[]}""",
+                ".minecraft/mods/foo.jar" to "jar")
+
+        val inspection = PackFormatDetector.inspect(pack)
+
+        assertEquals(PackFormatDetector.FORMAT_CURSE, inspection.format)
+        assertEquals("flame/manifest.json", inspection.manifestEntry)
+        assertEquals(".minecraft/", inspection.overridesPrefix)
+        assertTrue(inspection.instanceExport)
+    }
+
+    @Test
+    fun `嵌套目录里的 modrinth 实例按游戏目录剥离前缀`() {
+        val pack = zip("nested-mr.zip",
+                "pack/modrinth.index.json" to """{"formatVersion":1,"files":[]}""",
+                "pack/minecraft/mods/foo.jar" to "jar")
+
+        val inspection = PackFormatDetector.inspect(pack)
+
+        assertEquals(PackFormatDetector.FORMAT_MODRINTH, inspection.format)
+        assertEquals("pack/modrinth.index.json", inspection.manifestEntry)
+        assertEquals("pack/minecraft/", inspection.overridesPrefix)
+        assertTrue(inspection.instanceExport)
+    }
+
+    @Test
     fun `isZipFile 按魔数判断`() {
         val real = zip("magic.zip", "a.txt" to "hello")
         val fake = File(workDir, "fake.zip").apply { writeText("not a zip") }
